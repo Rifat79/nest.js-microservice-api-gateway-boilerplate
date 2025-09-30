@@ -9,30 +9,27 @@ export class ProxyController {
   constructor(
     private readonly proxyService: ProxyService,
     private readonly logger: PinoLogger,
-    // private readonly metricsService: MetricsService,
   ) {
     this.logger.setContext(ProxyController.name);
   }
 
-  @All(':serviceName/*')
+  @All(':serviceName/{*splat}')
   async proxyRequest(
     @Param('serviceName') serviceName: string,
+    @Param('splat') splat: string[],
     @Req() req: Request,
     @Res() res: Response,
   ) {
     const startTime = Date.now();
 
     try {
-      // Extract the remaining path after serviceName
-      const fullPath = req.path;
-      const servicePrefix = `/api/v1/services/${serviceName}`;
-      const targetPath = fullPath.replace(servicePrefix, '') || '/';
+      const targetPath = '/' + (splat?.join('/') || '');
 
       const proxyRequest: ProxyRequest = {
         method: req.method,
         url: targetPath,
         headers: this.sanitizeHeaders(req.headers),
-        body: req.body,
+        body: req.body as Record<string, unknown>,
         query: req.query,
         params: req.params,
       };
@@ -45,7 +42,7 @@ export class ProxyController {
       // Set response headers
       if (response.headers) {
         Object.entries(response.headers).forEach(([key, value]) => {
-          res.setHeader(key, value);
+          res.setHeader(key, value as string);
         });
       }
 
@@ -62,9 +59,18 @@ export class ProxyController {
       );
 
       res.status(response.statusCode).json(response.data);
-    } catch (error) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      const statusCode = error.getStatus?.() || 500;
+      let statusCode = 500;
+
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'getStatus' in error &&
+        typeof (error as Record<string, unknown>)?.getStatus === 'function'
+      ) {
+        statusCode = (error as { getStatus: () => number }).getStatus();
+      }
 
       this.logger.error(
         { serviceName, method: req.method, statusCode, duration, err: error },
@@ -72,14 +78,14 @@ export class ProxyController {
       );
 
       res.status(statusCode).json({
-        error: error.message || 'Internal server error',
+        error: error instanceof Error ? error.message : 'Internal server error',
         timestamp: new Date().toISOString(),
         path: req.path,
       });
     }
   }
 
-  private sanitizeHeaders(headers: any): Record<string, any> {
+  private sanitizeHeaders(headers: Record<string, any>): Record<string, any> {
     const sanitized = { ...headers };
 
     // Remove sensitive headers

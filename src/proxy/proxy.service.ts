@@ -12,17 +12,27 @@ import type { Cache } from 'cache-manager';
 import { PinoLogger } from 'nestjs-pino';
 import { catchError, firstValueFrom, throwError, timeout } from 'rxjs';
 import { CircuitBreakerService } from './circuit-breaker.service';
-// import { LoadBalancerService } from './load-balancer.service';
 
 export interface ProxyRequest {
   method: string;
   url: string;
+  headers: Record<string, string>;
+  body?: Record<string, unknown>;
+  query?: Record<string, any>;
+  params?: Record<string, any>;
+  userId?: string;
+  tenantId?: string;
+}
+
+interface ProxyPayload {
   headers: Record<string, any>;
   body?: any;
   query?: Record<string, any>;
   params?: Record<string, any>;
   userId?: string;
   tenantId?: string;
+  timestamp: number;
+  requestId?: string;
 }
 
 export interface ProxyResponse {
@@ -46,7 +56,6 @@ export class ProxyService {
     private readonly notificationClient: ClientProxy,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private readonly configService: ConfigService,
-    // private readonly loadBalancer: LoadBalancerService,
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly logger: PinoLogger,
     private readonly eventEmitter: EventEmitter2,
@@ -62,11 +71,15 @@ export class ProxyService {
     this.serviceClients.set('webhook', this.webhookClient);
 
     // Initialize timeouts
-    console.log('Config Services:', this.configService.get('services'));
-    const services = this.configService.get('services');
-    Object.entries(services).forEach(([name, config]: [string, any]) => {
-      this.serviceTimeouts.set(name, config.timeout);
-    });
+    const services =
+      this.configService.get<Record<string, { timeout: number }>>('services');
+    if (services) {
+      Object.entries(services).forEach(
+        ([name, config]: [string, { timeout: number }]) => {
+          this.serviceTimeouts.set(name, config.timeout);
+        },
+      );
+    }
   }
 
   async forwardRequest(
@@ -74,7 +87,10 @@ export class ProxyService {
     request: ProxyRequest,
   ): Promise<ProxyResponse> {
     const startTime = Date.now();
-    const requestId = request.headers['x-request-id'];
+    const requestId =
+      typeof request.headers['x-request-id'] === 'string'
+        ? request.headers['x-request-id']
+        : undefined;
 
     this.logger.info(
       {
@@ -137,11 +153,12 @@ export class ProxyService {
       const requestTimeout = this.serviceTimeouts.get(serviceName) || 30000;
 
       // Forward request with timeout and error handling
-      const response = await firstValueFrom(
-        client.send(pattern, payload).pipe(
+      const response = (await firstValueFrom(
+        client.send<ProxyResponse, ProxyPayload>(pattern, payload).pipe(
           timeout(requestTimeout),
-          catchError((error) => {
-            this.circuitBreaker.recordFailure(circuitBreakerKey);
+          catchError(async (error: Error) => {
+            await this.circuitBreaker.recordFailure(circuitBreakerKey);
+
             this.logger.error(
               {
                 requestId,
@@ -169,10 +186,10 @@ export class ProxyService {
             );
           }),
         ),
-      );
+      )) as ProxyResponse;
 
       // Record success for circuit breaker
-      this.circuitBreaker.recordSuccess(circuitBreakerKey);
+      await this.circuitBreaker.recordSuccess(circuitBreakerKey);
 
       const duration = Date.now() - startTime;
       const finalResponse: ProxyResponse = {
@@ -181,7 +198,7 @@ export class ProxyService {
       };
 
       // Cache successful GET responses
-      if (request.method === 'GET' && response.statusCode === 200) {
+      if (request.method === 'GET' && response?.statusCode === 200) {
         await this.setCachedResponse(serviceName, request, finalResponse);
       }
 
@@ -190,7 +207,7 @@ export class ProxyService {
         serviceName,
         pattern,
         duration,
-        statusCode: response.statusCode,
+        statusCode: response?.statusCode,
         requestId,
       });
 
@@ -199,34 +216,45 @@ export class ProxyService {
           requestId,
           serviceName,
           pattern,
-          statusCode: response.statusCode,
+          statusCode: response?.statusCode,
           duration,
         },
         'Request forwarded successfully',
       );
 
       return finalResponse;
-    } catch (error) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
 
-      this.logger.error(
-        {
-          requestId,
+      if (error instanceof Error) {
+        this.logger.error(
+          {
+            requestId,
+            serviceName,
+            error: error.message,
+            duration,
+            stack: error.stack,
+          },
+          'Proxy request failed',
+        );
+
+        this.eventEmitter.emit('service.request.error', {
           serviceName,
           error: error.message,
           duration,
-          stack: error.stack,
-        },
-        'Proxy request failed',
-      );
-
-      // Emit error event for monitoring
-      this.eventEmitter.emit('service.request.error', {
-        serviceName,
-        error: error.message,
-        duration,
-        requestId,
-      });
+          requestId,
+        });
+      } else {
+        this.logger.error(
+          {
+            requestId,
+            serviceName,
+            error: String(error),
+            duration,
+          },
+          'Proxy request failed with non-Error type',
+        );
+      }
 
       if (
         error instanceof ServiceUnavailableException ||
@@ -249,16 +277,19 @@ export class ProxyService {
       }
 
       const response = await firstValueFrom(
-        client.send('health.check', {}).pipe(
+        client.send<{ status: string }, object>('health.check', {}).pipe(
           timeout(5000),
           catchError(() => throwError(() => new Error('Health check failed'))),
         ),
       );
 
       return response && response.status === 'ok';
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.warn(
-        { serviceName, error: error.message },
+        {
+          serviceName,
+          error: error instanceof Error ? error.message : String(error),
+        },
         'Service health check failed',
       );
       return false;
@@ -273,7 +304,7 @@ export class ProxyService {
     return `${method.toLowerCase()}.${pathOnly || 'root'}`;
   }
 
-  private buildRequestPayload(request: ProxyRequest): any {
+  private buildRequestPayload(request: ProxyRequest): ProxyPayload {
     return {
       headers: this.sanitizeHeaders(request.headers),
       body: request.body,
@@ -310,7 +341,10 @@ export class ProxyService {
       const cacheKey = this.generateCacheKey(serviceName, request);
       return (await this.cacheManager.get<ProxyResponse>(cacheKey)) ?? null;
     } catch (error) {
-      this.logger.warn({ error: error.message }, 'Cache get error');
+      this.logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'Cache get error',
+      );
       return null;
     }
   }
@@ -325,7 +359,10 @@ export class ProxyService {
       const cacheTtl = this.getCacheTtl(serviceName, request.url);
       await this.cacheManager.set(cacheKey, response, cacheTtl);
     } catch (error) {
-      this.logger.warn({ error: error.message }, 'Cache set error');
+      this.logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'Cache set error',
+      );
     }
   }
 
@@ -337,7 +374,7 @@ export class ProxyService {
 
   private getCacheTtl(serviceName: string, url: string): number {
     // Default TTLs by service
-    const defaultTtls = {
+    const defaultTtls: Record<string, number> = {
       selfhost: 300000, // 5 minutes
       billing: 60000, // 1 minute
       notification: 30000, // 30 seconds

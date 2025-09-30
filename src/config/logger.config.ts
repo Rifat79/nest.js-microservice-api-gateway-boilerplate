@@ -1,5 +1,33 @@
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { IncomingMessage, OutgoingMessage } from 'http';
+
+interface HttpRequest extends IncomingMessage {
+  remoteAddress?: string;
+  remotePort?: number;
+  body?: Record<string, unknown>;
+  headers: IncomingMessage['headers'] & {
+    host?: string;
+    'user-agent'?: string;
+    'content-type'?: string;
+    authorization?: string;
+    'x-api-key'?: string;
+    'x-request-id'?: string;
+    cookie?: string;
+  };
+}
+
+interface HttpResponse extends OutgoingMessage {
+  statusCode?: number;
+  headers?: {
+    'content-type'?: string;
+    'content-length'?: string;
+  };
+}
+
+interface ErrObject extends Error {
+  type?: string;
+}
 
 export const createLoggerConfig = (configService: ConfigService) => ({
   pinoHttp: {
@@ -20,7 +48,7 @@ export const createLoggerConfig = (configService: ConfigService) => ({
         : undefined,
 
     serializers: {
-      req: (req) => ({
+      req: (req: HttpRequest) => ({
         id: req.id,
         method: req.method,
         url: req.url,
@@ -34,21 +62,21 @@ export const createLoggerConfig = (configService: ConfigService) => ({
         remoteAddress: req.remoteAddress,
         remotePort: req.remotePort,
       }),
-      res: (res) => ({
+      res: (res: HttpResponse) => ({
         statusCode: res.statusCode,
         headers: {
           'content-type': res.headers?.['content-type'],
           'content-length': res.headers?.['content-length'],
         },
       }),
-      err: (err) => ({
+      err: (err: ErrObject) => ({
         type: err.type,
         message: err.message,
         stack: err.stack,
       }),
     },
 
-    customProps: (req) => ({
+    customProps: (req: HttpRequest) => ({
       requestId: req.headers['x-request-id'],
     }),
 
@@ -63,6 +91,7 @@ export const createLoggerConfig = (configService: ConfigService) => ({
       censor: '[REDACTED]',
     },
 
-    genReqId: (req) => req?.headers['x-request-id'] ?? randomUUID(),
+    genReqId: (req: HttpRequest) =>
+      req?.headers['x-request-id'] ?? randomUUID(),
   },
 });

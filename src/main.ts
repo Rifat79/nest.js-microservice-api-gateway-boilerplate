@@ -1,19 +1,31 @@
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { Logger } from 'nestjs-pino';
+import { Logger, PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { LoggingInterceptor } from './common/interceptors/logging-interceptor';
+import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  await app.listen(process.env.PORT ?? 3080);
 
   // Use pino logger
   const pinoLogger = app.get(Logger);
+  const pLogger = await app.resolve(PinoLogger);
   app.useLogger(pinoLogger);
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port');
-  const environment = configService.get<string>('app.environment');
+
+  // Global prefix
+  app.setGlobalPrefix('api/v2');
+
+  // Global filters and interceptors
+  app.useGlobalFilters(new AllExceptionsFilter(pLogger));
+  app.useGlobalInterceptors(new LoggingInterceptor(pLogger));
+  app.useGlobalInterceptors(
+    new TimeoutInterceptor(configService.get<number>('REQUEST_TIMEOUT', 30000)),
+  );
 
   // Graceful shutdown
   app.enableShutdownHooks();
@@ -34,6 +46,8 @@ async function bootstrap() {
 
   process.on('SIGTERM', gracefulShutdown);
   process.on('SIGINT', gracefulShutdown);
+
+  await app.listen(process.env.PORT ?? 3080);
 
   pinoLogger.log(`🚀 Application is running on: http://localhost:${port}`);
 }

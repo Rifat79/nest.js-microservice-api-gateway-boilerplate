@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from './cache/cache.module';
+import { RequestIdMiddleware } from './common/middlewares/request-id.middleware';
 import appConfig from './config/app.config';
-import configuration from './config/configuration';
+import configuration from './config/microservices.config';
 import { LoggerModule } from './logger/logger.module';
 import { MicroservicesClientsModule } from './microservices/client.module';
 import { ProxyModule } from './proxy/proxy.module';
@@ -29,4 +30,10 @@ import { ProxyModule } from './proxy/proxy.module';
     ProxyModule,
   ],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(RequestIdMiddleware)
+      .forRoutes({ path: '*', method: RequestMethod.ALL });
+  }
+}

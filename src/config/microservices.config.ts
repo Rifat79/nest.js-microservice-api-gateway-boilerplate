@@ -1,26 +1,17 @@
 import { registerAs } from '@nestjs/config';
+import { validatedEnv } from './validate-env';
 
 export default registerAs('services', () => {
   return {
     selfhost: {
-      host: process.env.SELFHOST_SERVICE_HOST ?? 'localhost',
-      port: process.env.SELFHOST_SERVICE_PORT ?? 3081,
-      timeout: 30000,
+      host: validatedEnv.SELFHOST_SERVICE_HOST,
+      port: validatedEnv.SELFHOST_SERVICE_PORT,
+      timeout: validatedEnv.SELFHOST_SERVICE_TIMEOUT,
     },
     billing: {
-      host: process.env.BILLING_SERVICE_HOST ?? 'localhost',
-      port: process.env.BILLING_SERVICE_PORT ?? 3082,
-      timeout: 20000,
-    },
-    notification: {
-      host: process.env.NOTIFICATION_SERVICE_HOST ?? 'localhost',
-      port: process.env.NOTIFICATION_SERVICE_PORT ?? 3083,
-      timeout: 15000,
-    },
-    webhook: {
-      host: process.env.WEBHOOK_SERVICE_HOST ?? 'localhost',
-      port: process.env.WEBHOOK_SERVICE_PORT ?? 3084,
-      timeout: 10000,
+      host: validatedEnv.BILLING_SERVICE_HOST,
+      port: validatedEnv.BILLING_SERVICE_PORT,
+      timeout: validatedEnv.BILLING_SERVICE_TIMEOUT,
     },
   };
 });

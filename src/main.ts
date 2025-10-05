@@ -24,7 +24,9 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter(pLogger));
   app.useGlobalInterceptors(new LoggingInterceptor(pLogger));
   app.useGlobalInterceptors(
-    new TimeoutInterceptor(configService.get<number>('REQUEST_TIMEOUT', 30000)),
+    new TimeoutInterceptor(
+      configService.get<number>('app.requestTimeoutMs', 30000),
+    ),
   );
 
   // Graceful shutdown

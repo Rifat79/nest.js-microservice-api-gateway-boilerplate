@@ -12,12 +12,12 @@ import { CacheService } from './cache.service';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const host = configService.get<string>('REDIS_HOST', 'localhost');
-        const port = configService.get<number>('REDIS_PORT', 6379);
-        const password = configService.get<string>('REDIS_PASSWORD', '');
-        const db = configService.get<number>('REDIS_DB', 0);
-        const prefix = configService.get<string>('REDIS_KEY_PREFIX', 'cache:');
-        const ttl = configService.get<number>('CACHE_TTL_MS', 300_000); // 5 minutes
+        const host = configService.get<string>('redis.host');
+        const port = configService.get<number>('redis.port');
+        const password = configService.get<string>('redis.password');
+        const db = configService.get<number>('redis.db');
+        const prefix = configService.get<string>('redis.keyPrefix');
+        const ttl = configService.get<number>('redis.cacheTtlMs');
 
         const redisUrl = new URL(`redis://${host}:${port}`);
         if (password) redisUrl.password = password;

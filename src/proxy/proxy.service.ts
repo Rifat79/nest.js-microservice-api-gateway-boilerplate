@@ -59,9 +59,6 @@ export class ProxyService {
     @Inject('SELFHOST_SERVICE') private readonly selfhostClient: ClientProxy,
     @Inject('BILLING_SERVICE') private readonly billingClient: ClientProxy,
 
-    @Inject('WEBHOOK_SERVICE') private readonly webhookClient: ClientProxy,
-    @Inject('NOTIFICATION_SERVICE')
-    private readonly notificationClient: ClientProxy,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private readonly configService: ConfigService,
     private readonly circuitBreaker: CircuitBreakerService,
@@ -75,8 +72,6 @@ export class ProxyService {
     // Initialize service clients map
     this.serviceClients.set('selfhost', this.selfhostClient);
     this.serviceClients.set('billing', this.billingClient);
-    this.serviceClients.set('notification', this.notificationClient);
-    this.serviceClients.set('webhook', this.webhookClient);
 
     // Initialize timeouts
     const services =

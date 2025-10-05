@@ -4,6 +4,7 @@ import { CacheModule } from './cache/cache.module';
 import { RequestIdMiddleware } from './common/middlewares/request-id.middleware';
 import appConfig from './config/app.config';
 import configuration from './config/microservices.config';
+import redisConfig from './config/redis.config';
 import { LoggerModule } from './logger/logger.module';
 import { MicroservicesClientsModule } from './microservices/client.module';
 import { ProxyModule } from './proxy/proxy.module';
@@ -13,8 +14,8 @@ import { ProxyModule } from './proxy/proxy.module';
     // Configurations
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
-      load: [appConfig, configuration],
+      // envFilePath: ['.env.local', '.env'],
+      load: [appConfig, configuration, redisConfig],
     }),
 
     // Cache

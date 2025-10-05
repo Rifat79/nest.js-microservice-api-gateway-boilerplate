@@ -1,8 +1,10 @@
 import { registerAs } from '@nestjs/config';
+import { validatedEnv } from './validate-env';
 
 export default registerAs('app', () => {
   return {
-    nodeEnv: process.env.NODE_ENV || 'development',
-    port: parseInt(process.env.PORT || '3000', 10),
+    nodeEnv: validatedEnv.NODE_ENV,
+    port: validatedEnv.PORT,
+    requestTimeoutMs: validatedEnv.REQUEST_TIMEOUT_MS,
   };
 });

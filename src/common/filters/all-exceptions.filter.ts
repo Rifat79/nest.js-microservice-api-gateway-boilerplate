@@ -45,8 +45,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error = exceptionResponse;
       message = exceptionResponse;
     } else if (exceptionResponse && typeof exceptionResponse === 'object') {
-      error = (exceptionResponse as Record<string, any>).error ?? error;
-      message = (exceptionResponse as Record<string, any>).message ?? message;
+      const respObj = exceptionResponse as Record<string, unknown>;
+      error = typeof respObj.error === 'string' ? respObj.error : error;
+      message = typeof respObj.message === 'string' ? respObj.message : message;
     }
 
     const errorResponse: ErrorResponse = {
@@ -68,7 +69,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
             method: request.method,
             url: request.url,
             headers: request.headers,
-            body: request.body,
+            body: request.body as unknown,
           },
           response: errorResponse,
         },

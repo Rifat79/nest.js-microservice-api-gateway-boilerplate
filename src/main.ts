@@ -1,3 +1,4 @@
+import { VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger, PinoLogger } from 'nestjs-pino';
@@ -18,7 +19,11 @@ async function bootstrap() {
   const port = configService.get<number>('app.port');
 
   // Global prefix
-  app.setGlobalPrefix('api/v2');
+  app.setGlobalPrefix('api');
+  // Versioning
+  app.enableVersioning({
+    type: VersioningType.URI,
+  });
 
   // Global filters and interceptors
   app.useGlobalFilters(new AllExceptionsFilter(pLogger));
@@ -49,7 +54,7 @@ async function bootstrap() {
   process.on('SIGTERM', gracefulShutdown);
   process.on('SIGINT', gracefulShutdown);
 
-  await app.listen(process.env.PORT ?? 3080);
+  await app.listen(port ?? 3080);
 
   pinoLogger.log(`🚀 Application is running on: http://localhost:${port}`);
 }

@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
 import { ProxyRequest, ProxyService } from './proxy.service';
 
-@Controller('gateway')
+@Controller({ version: '2', path: 'gateway' })
 export class ProxyController {
   constructor(
     private readonly proxyService: ProxyService,
@@ -57,6 +57,15 @@ export class ProxyController {
         },
         'Request proxied successfully',
       );
+
+      // ✅ Handle redirect if needed
+      if (
+        response.statusCode >= 300 &&
+        response.statusCode < 400 &&
+        response.headers?.Location
+      ) {
+        return res.redirect(response.statusCode, response.headers.Location);
+      }
 
       res.status(response.statusCode).json(response.data);
     } catch (error: unknown) {

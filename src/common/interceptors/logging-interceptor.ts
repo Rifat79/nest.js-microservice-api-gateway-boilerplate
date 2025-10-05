@@ -14,13 +14,15 @@ export class LoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const ctx = context.switchToHttp();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<
+      Request & { requestId?: string; user?: { id?: string } }
+    >();
     const response = ctx.getResponse<Response>();
     const startTime = Date.now();
 
     const { method, url, headers } = request;
-    const requestId = (request as any).requestId;
-    const userId = (request as any).user?.id;
+    const requestId = request.requestId;
+    const userId = request.user?.id;
 
     return next.handle().pipe(
       tap({
@@ -42,7 +44,7 @@ export class LoggingInterceptor implements NestInterceptor {
             `${method} ${url} - ${statusCode} - ${duration}ms`,
           );
         },
-        error: (error) => {
+        error: (error: Error) => {
           const duration = Date.now() - startTime;
 
           this.logger.error(

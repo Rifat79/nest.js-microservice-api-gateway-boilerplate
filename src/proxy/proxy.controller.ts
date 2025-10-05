@@ -77,11 +77,7 @@ export class ProxyController {
         `Proxy error for ${serviceName}`,
       );
 
-      res.status(statusCode).json({
-        error: error instanceof Error ? error.message : 'Internal server error',
-        timestamp: new Date().toISOString(),
-        path: req.path,
-      });
+      throw error;
     }
   }
 

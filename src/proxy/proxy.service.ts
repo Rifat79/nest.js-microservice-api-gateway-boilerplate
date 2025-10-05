@@ -1,6 +1,7 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
+  HttpException,
   Inject,
   Injectable,
   ServiceUnavailableException,
@@ -10,7 +11,14 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClientProxy } from '@nestjs/microservices';
 import type { Cache } from 'cache-manager';
 import { PinoLogger } from 'nestjs-pino';
-import { catchError, firstValueFrom, throwError, timeout } from 'rxjs';
+import {
+  catchError,
+  defer,
+  firstValueFrom,
+  throwError,
+  timeout,
+  TimeoutError,
+} from 'rxjs';
 import { CircuitBreakerService } from './circuit-breaker.service';
 
 export interface ProxyRequest {
@@ -156,35 +164,41 @@ export class ProxyService {
       const response = (await firstValueFrom(
         client.send<ProxyResponse, ProxyPayload>(pattern, payload).pipe(
           timeout(requestTimeout),
-          catchError(async (error: Error) => {
-            await this.circuitBreaker.recordFailure(circuitBreakerKey);
+          catchError((error: Error) =>
+            defer<Promise<void>>(async () => {
+              // Record failure for circuit breaker
+              if (this.shouldRecordFailure(error)) {
+                await this.circuitBreaker.recordFailure(circuitBreakerKey);
+              }
 
-            this.logger.error(
-              {
-                requestId,
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              const errorStack =
+                error instanceof Error ? error.stack : undefined;
+
+              this.logger.error(
+                {
+                  requestId,
+                  serviceName,
+                  pattern,
+                  error: errorMessage,
+                  stack: errorStack,
+                },
+                'Service request failed',
+              );
+
+              this.eventEmitter.emit('service.request.failed', {
                 serviceName,
                 pattern,
-                error: error.message,
-                stack: error.stack,
-              },
-              'Service request failed',
-            );
+                error: errorMessage,
+                requestId,
+              });
 
-            // Emit failure event for monitoring
-            this.eventEmitter.emit('service.request.failed', {
-              serviceName,
-              pattern,
-              error: error.message,
-              requestId,
-            });
-
-            return throwError(
-              () =>
-                new ServiceUnavailableException(
-                  `Service ${serviceName} unavailable: ${error.message}`,
-                ),
-            );
-          }),
+              throw new ServiceUnavailableException(
+                `Service ${serviceName} unavailable: ${errorMessage}`,
+              );
+            }),
+          ),
         ),
       )) as ProxyResponse;
 
@@ -370,6 +384,54 @@ export class ProxyService {
     const queryString = request.query ? JSON.stringify(request.query) : '';
     const userContext = request.tenantId || 'global';
     return `proxy:${serviceName}:${userContext}:${request.url}:${queryString}`;
+  }
+
+  private shouldRecordFailure(error: unknown): boolean {
+    if (error instanceof TimeoutError) {
+      return true;
+    }
+
+    if (error instanceof HttpException) {
+      const status = error.getStatus?.();
+
+      if (typeof status === 'number') {
+        // Count 5xx and 429 as failures
+        if (status >= 500 || status === 429) {
+          return true;
+        }
+        return false;
+      }
+
+      return false;
+    }
+
+    if (error instanceof ServiceUnavailableException) {
+      return true;
+    }
+
+    if (error && typeof error === 'object' && 'code' in error) {
+      const code = (error as { code?: unknown }).code;
+
+      if (typeof code === 'string') {
+        const networkErrorCodes = [
+          'ECONNREFUSED',
+          'ECONNRESET',
+          'ENOTFOUND',
+          'ETIMEDOUT',
+          'EHOSTUNREACH',
+          'EPIPE',
+          'ECONNABORTED',
+          'ENETUNREACH',
+        ];
+
+        if (networkErrorCodes.includes(code)) {
+          return true;
+        }
+      }
+    }
+
+    // Fallback: unknown errors are not considered failures
+    return false;
   }
 
   private getCacheTtl(serviceName: string, url: string): number {

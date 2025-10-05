@@ -8,43 +8,58 @@ import {
 import { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
 
+interface ErrorResponse {
+  success: boolean;
+  statusCode: number;
+  timestamp: string;
+  path: string;
+  method: string;
+  requestId?: string;
+  error: string;
+  message: string;
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   constructor(private readonly logger: PinoLogger) {}
 
-  catch(exception: any, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<Request & { requestId?: string }>();
 
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : 'Internal server error';
+    // `getResponse()` can be string or object, so normalize carefully
+    const exceptionResponse =
+      exception instanceof HttpException ? exception.getResponse() : null;
 
-    const errorResponse = {
+    // Extract error/message from response (handle string or object)
+    let error = 'Unknown error';
+    let message = 'An error occurred';
+
+    if (typeof exceptionResponse === 'string') {
+      error = exceptionResponse;
+      message = exceptionResponse;
+    } else if (exceptionResponse && typeof exceptionResponse === 'object') {
+      error = (exceptionResponse as Record<string, any>).error ?? error;
+      message = (exceptionResponse as Record<string, any>).message ?? message;
+    }
+
+    const errorResponse: ErrorResponse = {
       success: false,
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
       method: request.method,
-      requestId: (request as any).requestId,
-      error:
-        typeof message === 'string'
-          ? message
-          : (message as any).error || 'Unknown error',
-      message:
-        typeof message === 'string'
-          ? message
-          : (message as any).message || 'An error occurred',
+      requestId: request.requestId,
+      error,
+      message,
     };
 
-    // Log based on status code
     if (status >= 500) {
       this.logger.error(
         {

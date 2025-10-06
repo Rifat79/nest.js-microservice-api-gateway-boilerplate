@@ -51,7 +51,7 @@ export interface ProxyResponse {
 }
 
 @Injectable()
-export class ProxyService {
+export class LegacyProxyService {
   private readonly serviceTimeouts: Map<string, number> = new Map();
   private readonly serviceClients: Map<string, ClientProxy> = new Map();
 
@@ -87,6 +87,7 @@ export class ProxyService {
 
   async forwardRequest(
     serviceName: string,
+    messagePattern: string,
     request: ProxyRequest,
   ): Promise<ProxyResponse> {
     const startTime = Date.now();
@@ -151,7 +152,7 @@ export class ProxyService {
       }
 
       // Build message pattern and payload
-      const pattern = this.buildMessagePattern(request.method, request.url);
+      const pattern = messagePattern;
       const payload = this.buildRequestPayload(request);
       const requestTimeout = this.serviceTimeouts.get(serviceName) || 30000;
 
@@ -303,14 +304,6 @@ export class ProxyService {
       );
       return false;
     }
-  }
-
-  private buildMessagePattern(method: string, url: string): string {
-    // Remove leading slash and replace slashes with dots
-    const cleanUrl = url.replace(/^\/+/, '').replace(/\//g, '.');
-    // Remove query parameters and fragments
-    const pathOnly = cleanUrl.split('?')[0].split('#')[0];
-    return `${method.toLowerCase()}.${pathOnly || 'root'}`;
   }
 
   private buildRequestPayload(request: ProxyRequest): ProxyPayload {

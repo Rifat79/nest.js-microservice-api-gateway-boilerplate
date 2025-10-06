@@ -7,6 +7,7 @@ import circuitBreakerConfig from './config/circuit-breaker.config';
 import loggerConfig from './config/logger.config';
 import configuration from './config/microservices.config';
 import redisConfig from './config/redis.config';
+import { LegacyProxyModule } from './legacy-proxy/legacy-proxy.module';
 import { LoggerModule } from './logger/logger.module';
 import { MicroservicesClientsModule } from './microservices/client.module';
 import { ProxyModule } from './proxy/proxy.module';
@@ -37,6 +38,7 @@ import { ProxyModule } from './proxy/proxy.module';
 
     // Proxy
     ProxyModule,
+    LegacyProxyModule,
   ],
 })
 export class AppModule {

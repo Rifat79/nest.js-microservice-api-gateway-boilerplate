@@ -10,6 +10,7 @@ export const envSchema = z.object({
     .positive()
     .optional()
     .default(30000),
+  CORS_ORIGIN: z.string().optional().default('*'),
 
   // redis
   REDIS_HOST: z.string().min(1, 'REDIS_HOST cannot be empty'),

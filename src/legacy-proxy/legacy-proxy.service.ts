@@ -46,7 +46,7 @@ interface ProxyPayload {
 export interface ProxyResponse {
   statusCode: number;
   data: any;
-  headers?: Record<string, any>;
+  headers?: Record<string, unknown>;
   duration?: number;
 }
 

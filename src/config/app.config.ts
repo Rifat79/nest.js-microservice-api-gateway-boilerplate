@@ -6,5 +6,6 @@ export default registerAs('app', () => {
     nodeEnv: validatedEnv.NODE_ENV,
     port: validatedEnv.PORT,
     requestTimeoutMs: validatedEnv.REQUEST_TIMEOUT_MS,
+    corsOrigin: validatedEnv.CORS_ORIGIN,
   };
 });

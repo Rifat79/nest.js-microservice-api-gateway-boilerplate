@@ -8,10 +8,15 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
-import { LegacyProxyService, ProxyRequest } from './legacy-proxy.service';
-import { RouteConfigService } from './route-config.service';
 
-@Controller({ version: '2' }) // This controller handles everything under /api/v2
+import {
+  LegacyProxyService,
+  ProxyRequest,
+  ProxyResponse,
+} from './legacy-proxy.service';
+import { RouteConfig, RouteConfigService } from './route-config.service';
+
+@Controller({ version: '2' })
 export class LegacyProxyController {
   constructor(
     private readonly legacyProxyService: LegacyProxyService,
@@ -21,17 +26,18 @@ export class LegacyProxyController {
     this.logger.setContext(LegacyProxyController.name);
   }
 
-  @All('*wildcard')
-  async legacyProxyRequest(@Req() req: Request, @Res() res: Response) {
-    let serviceName = '';
+  @All('*path')
+  async legacyProxyRequest(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
     const startTime = Date.now();
+    let serviceName = '';
+    let routeConfig: RouteConfig | null = null;
 
     try {
-      // Find matching route configuration
-      const routeConfig = this.routeConfigService.findRoute(
-        req.path,
-        req.method,
-      );
+      // Match route
+      routeConfig = this.routeConfigService.findRoute(req.path, req.method);
 
       if (!routeConfig) {
         throw new HttpException(
@@ -51,75 +57,113 @@ export class LegacyProxyController {
         params: req.params,
       };
 
-      const response = await this.legacyProxyService.forwardRequest(
-        serviceName,
-        routeConfig.messagePattern,
-        proxyRequest,
-      );
+      const proxyResponse: ProxyResponse =
+        await this.legacyProxyService.forwardRequest(
+          serviceName,
+          routeConfig.messagePattern,
+          proxyRequest,
+        );
 
-      // Set response headers
-      if (response.headers) {
-        Object.entries(response.headers).forEach(([key, value]) => {
-          res.setHeader(key, value as string);
-        });
-      }
+      this.setResponseHeaders(res, proxyResponse.headers);
 
-      // Record metrics
       const duration = Date.now() - startTime;
       this.logger.info(
         {
           serviceName,
           method: req.method,
-          statusCode: response.statusCode,
+          statusCode: proxyResponse.statusCode,
           duration,
         },
         'Request proxied successfully',
       );
 
-      // ✅ Handle redirect if needed
-      if (
-        response.statusCode >= 300 &&
-        response.statusCode < 400 &&
-        response.headers?.Location
-      ) {
-        return res.redirect(response.statusCode, response.headers.Location);
+      if (this.isRedirect(proxyResponse)) {
+        return res.redirect(
+          proxyResponse.statusCode,
+          proxyResponse.headers!.Location as string,
+        );
       }
 
-      res.status(response.statusCode).json(response.data);
-    } catch (error: unknown) {
+      res.status(proxyResponse.statusCode).json(proxyResponse.data);
+    } catch (error) {
       const duration = Date.now() - startTime;
-      let statusCode = 500;
-
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'getStatus' in error &&
-        typeof (error as Record<string, unknown>)?.getStatus === 'function'
-      ) {
-        statusCode = (error as { getStatus: () => number }).getStatus();
-      }
+      const statusCode = this.resolveStatusCode(error);
 
       this.logger.error(
-        { serviceName, method: req.method, statusCode, duration, err: error },
+        {
+          serviceName,
+          method: req.method,
+          statusCode,
+          duration,
+          error,
+        },
         `Proxy error for ${serviceName}`,
       );
 
+      // Return error directly so global exception filters or middleware can handle it.
       throw error;
     }
   }
 
-  private sanitizeHeaders(headers: Record<string, any>): Record<string, any> {
-    const sanitized = { ...headers };
+  private sanitizeHeaders(
+    headers: Record<string, unknown>,
+  ): Record<string, string> {
+    const sanitized: Record<string, string> = {};
 
-    // Remove sensitive headers
-    delete sanitized.authorization;
-    delete sanitized.cookie;
-    delete sanitized['x-api-key'];
+    Object.entries(headers).forEach(([key, value]) => {
+      if (typeof value !== 'string') return;
 
-    // Add request tracking
+      const lowerKey = key.toLowerCase();
+
+      // Filter out sensitive headers
+      if (['authorization', 'cookie', 'x-api-key'].includes(lowerKey)) {
+        return;
+      }
+
+      sanitized[lowerKey] = value;
+    });
+
     sanitized['x-forwarded-by'] = 'api-gateway';
     sanitized['x-request-timestamp'] = Date.now().toString();
 
     return sanitized;
+  }
+
+  private setResponseHeaders(
+    res: Response,
+    headers?: Record<string, unknown>,
+  ): void {
+    if (!headers) return;
+
+    for (const [key, value] of Object.entries(headers)) {
+      if (value !== undefined) {
+        res.setHeader(key, value as string);
+      }
+    }
+  }
+
+  private resolveStatusCode(error: unknown): number {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'getStatus' in error &&
+      typeof (error as any)?.getStatus === 'function'
+    ) {
+      return (error as { getStatus: () => number }).getStatus();
+    }
+
+    return HttpStatus.INTERNAL_SERVER_ERROR;
+  }
+
+  private isRedirect(response: ProxyResponse): boolean {
+    const { statusCode, headers } = response;
+    const location = headers?.['Location'] ?? headers?.['location'];
+
+    return (
+      statusCode >= 300 &&
+      statusCode < 400 &&
+      typeof location === 'string' &&
+      location.length > 0
+    );
   }
 }

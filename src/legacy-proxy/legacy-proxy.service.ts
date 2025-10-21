@@ -21,6 +21,13 @@ import {
 } from 'rxjs';
 import { CircuitBreakerService } from 'src/circuit-breaker/circuit-breaker.service';
 
+// Define the expected structure of the error payload from your microservice's AllExceptionsFilter
+interface StructuredRpcError {
+  status: number; // The HTTP status code (e.g., 400, 404)
+  message: string;
+  [key: string]: any;
+}
+
 export interface ProxyRequest {
   method: string;
   url: string;
@@ -162,13 +169,20 @@ export class LegacyProxyService {
           timeout(requestTimeout),
           catchError((error: Error) =>
             defer<Promise<void>>(async () => {
+              console.log('***********************', JSON.stringify(error));
               // Record failure for circuit breaker
               if (this.shouldRecordFailure(error)) {
                 await this.circuitBreaker.recordFailure(circuitBreakerKey);
               }
 
               const errorMessage =
-                error instanceof Error ? error.message : String(error);
+                error instanceof Error
+                  ? error.message
+                  : typeof error === 'object' &&
+                      error !== null &&
+                      'message' in error
+                    ? String((error as any).message)
+                    : String(error);
               const errorStack =
                 error instanceof Error ? error.stack : undefined;
 

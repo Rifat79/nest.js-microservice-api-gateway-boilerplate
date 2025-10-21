@@ -37,7 +37,7 @@ export class CircuitBreakerService {
     );
     this.resetTimeout = this.configService.get(
       'circuitBreaker.resetTimeout',
-      60000,
+      1000,
     );
     this.monitoringPeriod = this.configService.get(
       'circuitBreaker.monitoringPeriod',

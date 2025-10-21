@@ -74,6 +74,14 @@ export class RouteConfigService {
         methods: ['GET'],
         requiresAuth: false,
       },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/gpdob/charge',
+        messagePattern: BillingMessagePatterns.CREATE_SUBSCRIPTION,
+        methods: ['POST'],
+        requiresAuth: false,
+      },
     ];
 
     routeConfigs.forEach((config) => {

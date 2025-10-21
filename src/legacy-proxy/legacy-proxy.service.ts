@@ -1,10 +1,15 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   HttpException,
   Inject,
   Injectable,
+  InternalServerErrorException,
+  NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -167,22 +172,27 @@ export class LegacyProxyService {
       const response = (await firstValueFrom(
         client.send<ProxyResponse, ProxyPayload>(pattern, payload).pipe(
           timeout(requestTimeout),
-          catchError((error: Error) =>
+          catchError((error) =>
             defer<Promise<void>>(async () => {
-              console.log('***********************', JSON.stringify(error));
+              console.log(
+                '***********************',
+                JSON.stringify(error),
+                '%%%%%%%%%%%%%%%%%',
+                error.error.message,
+                '$$$$$$$$$$',
+                error.error.status,
+              );
               // Record failure for circuit breaker
               if (this.shouldRecordFailure(error)) {
                 await this.circuitBreaker.recordFailure(circuitBreakerKey);
               }
 
               const errorMessage =
-                error instanceof Error
-                  ? error.message
-                  : typeof error === 'object' &&
-                      error !== null &&
-                      'message' in error
-                    ? String((error as any).message)
-                    : String(error);
+                typeof error === 'object' &&
+                error !== null &&
+                'message' in error
+                  ? String((error as any).message)
+                  : String(error);
               const errorStack =
                 error instanceof Error ? error.stack : undefined;
 
@@ -203,6 +213,11 @@ export class LegacyProxyService {
                 error: errorMessage,
                 requestId,
               });
+
+              if (this.isStructuredRpcError(error)) {
+                console.log('>>>>>>>>>>>>>>>>>>>>>>>>', error);
+                throw this.mapErrorToHttpResponse(error);
+              }
 
               throw new ServiceUnavailableException(
                 `Service ${serviceName} unavailable: ${errorMessage}`,
@@ -282,7 +297,8 @@ export class LegacyProxyService {
 
       if (
         error instanceof ServiceUnavailableException ||
-        error instanceof BadRequestException
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
       ) {
         throw error;
       }
@@ -458,5 +474,34 @@ export class LegacyProxyService {
     }
 
     return baseTtl;
+  }
+
+  private mapErrorToHttpResponse(error: any) {
+    const e =
+      typeof error === 'object' && 'error' in error ? error.error : error;
+    const { status, message } = e;
+    console.log('+++++++++++++++++++', status, message);
+
+    switch (status) {
+      case 400:
+        return new BadRequestException({ message });
+      case 401:
+        return new UnauthorizedException({ message });
+      case 403:
+        return new ForbiddenException({ message });
+      case 404:
+        return new NotFoundException({ message });
+      case 409:
+        return new ConflictException({ message });
+      case 500:
+        return new InternalServerErrorException({ message });
+      default:
+        return new HttpException({ message }, status);
+    }
+  }
+
+  private isStructuredRpcError(error: any) {
+    const e = error?.error || error;
+    return e && typeof e === 'object' && 'status' in e && 'message' in e;
   }
 }

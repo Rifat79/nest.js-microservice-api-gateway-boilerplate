@@ -6,7 +6,6 @@ import helmet from 'helmet';
 import { Logger, PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { LoggingInterceptor } from './common/interceptors/logging-interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 
 async function bootstrap() {
@@ -54,7 +53,7 @@ async function bootstrap() {
 
   // Global filters and interceptors
   app.useGlobalFilters(new AllExceptionsFilter(pLogger));
-  app.useGlobalInterceptors(new LoggingInterceptor(pLogger));
+  // app.useGlobalInterceptors(new LoggingInterceptor(pLogger));
   app.useGlobalInterceptors(
     new TimeoutInterceptor(
       configService.get<number>('app.requestTimeoutMs', 30000),

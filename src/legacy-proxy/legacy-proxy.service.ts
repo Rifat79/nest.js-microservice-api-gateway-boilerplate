@@ -227,6 +227,8 @@ export class LegacyProxyService {
         ),
       )) as ProxyResponse;
 
+      console.log('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', { response });
+
       // Record success for circuit breaker
       await this.circuitBreaker.recordSuccess(circuitBreakerKey);
 
@@ -295,11 +297,7 @@ export class LegacyProxyService {
         );
       }
 
-      if (
-        error instanceof ServiceUnavailableException ||
-        error instanceof BadRequestException ||
-        error instanceof NotFoundException
-      ) {
+      if (!(error instanceof ServiceUnavailableException)) {
         throw error;
       }
 

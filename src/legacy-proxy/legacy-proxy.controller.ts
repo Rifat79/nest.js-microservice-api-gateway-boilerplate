@@ -64,7 +64,7 @@ export class LegacyProxyController {
           proxyRequest,
         );
 
-      this.setResponseHeaders(res, proxyResponse.headers);
+      // this.setResponseHeaders(res, proxyResponse.headers);
 
       const duration = Date.now() - startTime;
       this.logger.info(
@@ -84,7 +84,17 @@ export class LegacyProxyController {
         );
       }
 
-      res.status(proxyResponse.statusCode).json(proxyResponse.data);
+      const {
+        headers,
+        duration: ignoreDuration,
+        ...cleanedResponse
+      } = proxyResponse;
+
+      res.status(cleanedResponse.statusCode ?? 200).json({
+        ...cleanedResponse,
+        success: true,
+        statusCode: cleanedResponse.statusCode ?? 200,
+      });
     } catch (error) {
       const duration = Date.now() - startTime;
       const statusCode = this.resolveStatusCode(error);

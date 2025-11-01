@@ -82,6 +82,14 @@ export class RouteConfigService {
         methods: ['POST'],
         requiresAuth: false,
       },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/subscriptions/:subscriptionId/redirect',
+        messagePattern: BillingMessagePatterns.REDIRECTION,
+        methods: ['GET', 'POST'],
+        requiresAuth: false,
+      },
     ];
 
     routeConfigs.forEach((config) => {

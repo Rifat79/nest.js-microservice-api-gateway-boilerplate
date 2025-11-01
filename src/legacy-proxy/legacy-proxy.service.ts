@@ -174,14 +174,14 @@ export class LegacyProxyService {
           timeout(requestTimeout),
           catchError((error) =>
             defer<Promise<void>>(async () => {
-              console.log(
-                '***********************',
-                JSON.stringify(error),
-                '%%%%%%%%%%%%%%%%%',
-                error.error.message,
-                '$$$$$$$$$$',
-                error.error.status,
-              );
+              // console.log(
+              //   '***********************',
+              //   JSON.stringify(error),
+              //   '%%%%%%%%%%%%%%%%%',
+              //   error.error.message,
+              //   '$$$$$$$$$$',
+              //   error.error.status,
+              // );
               // Record failure for circuit breaker
               if (this.shouldRecordFailure(error)) {
                 await this.circuitBreaker.recordFailure(circuitBreakerKey);
@@ -477,7 +477,7 @@ export class LegacyProxyService {
   private mapErrorToHttpResponse(error: any) {
     const e =
       typeof error === 'object' && 'error' in error ? error.error : error;
-    const { status, message } = e;
+    const { status, message, code } = e;
     console.log('+++++++++++++++++++', status, message);
 
     switch (status) {
@@ -488,7 +488,7 @@ export class LegacyProxyService {
       case 403:
         return new ForbiddenException({ message });
       case 404:
-        return new NotFoundException({ message });
+        return new NotFoundException({ message, code });
       case 409:
         return new ConflictException({ message });
       case 500:

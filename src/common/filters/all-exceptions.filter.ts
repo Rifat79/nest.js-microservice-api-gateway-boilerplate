@@ -15,7 +15,7 @@ interface ErrorResponse {
   path: string;
   method: string;
   requestId?: string;
-  error: string;
+  // error: string;
   message: string;
 }
 
@@ -57,7 +57,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: request.url,
       method: request.method,
       requestId: request.requestId,
-      error,
+      // error,
       message,
     };
 

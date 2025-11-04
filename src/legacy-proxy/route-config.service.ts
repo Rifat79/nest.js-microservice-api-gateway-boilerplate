@@ -14,6 +14,7 @@ export interface RouteConfig {
     ttl: number;
     limit: number;
   };
+  meta?: Record<string, any>;
 }
 
 export interface ServiceEndpoint {
@@ -105,6 +106,17 @@ export class RouteConfigService {
         messagePattern: BillingMessagePatterns.CANCEL_SUBSCRIPTION,
         methods: ['POST', 'GET'],
         requiresAuth: false,
+      },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/payment/banglalink-webhook',
+        messagePattern: BillingMessagePatterns.WEBHOOK_RECEIVER,
+        methods: ['POST', 'GET'],
+        requiresAuth: false,
+        meta: {
+          provider: 'BL',
+        },
       },
     ];
 

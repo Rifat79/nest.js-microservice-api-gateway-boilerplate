@@ -55,6 +55,7 @@ export class LegacyProxyController {
         body: req.body as Record<string, unknown>,
         query: req.query,
         params: req.params,
+        meta: routeConfig.meta,
       };
 
       const proxyResponse: ProxyResponse =

@@ -42,6 +42,7 @@ export interface ProxyRequest {
   params?: Record<string, any>;
   userId?: string;
   tenantId?: string;
+  meta?: Record<string, any>;
 }
 
 interface ProxyPayload {

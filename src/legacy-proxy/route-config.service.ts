@@ -90,6 +90,22 @@ export class RouteConfigService {
         methods: ['GET', 'POST'],
         requiresAuth: false,
       },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/gpdob/unsubscribe',
+        messagePattern: BillingMessagePatterns.CANCEL_SUBSCRIPTION,
+        methods: ['POST'],
+        requiresAuth: false,
+      },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/bldob/unsubscribe/:subscriptionId',
+        messagePattern: BillingMessagePatterns.CANCEL_SUBSCRIPTION,
+        methods: ['POST', 'GET'],
+        requiresAuth: false,
+      },
     ];
 
     routeConfigs.forEach((config) => {

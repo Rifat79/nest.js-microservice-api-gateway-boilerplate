@@ -54,6 +54,7 @@ interface ProxyPayload {
   tenantId?: string;
   timestamp: number;
   requestId?: string;
+  meta?: Record<string, any>;
 }
 
 export interface ProxyResponse {
@@ -345,6 +346,7 @@ export class LegacyProxyService {
       tenantId: request.tenantId,
       timestamp: Date.now(),
       requestId: request.headers['x-request-id'],
+      meta: request.meta,
     };
   }
 

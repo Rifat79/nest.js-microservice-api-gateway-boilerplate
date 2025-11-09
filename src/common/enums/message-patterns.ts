@@ -5,4 +5,5 @@ export enum BillingMessagePatterns {
   CANCEL_SUBSCRIPTION = 'billing.cancel_subscription',
   WEBHOOK_RECEIVER = 'billing.webhook.receiver',
   RECHARGE_AND_BUY_REDIRECTION = 'billing.recharge.redirection',
+  VERIFY_PIN = 'billing.pin.verification',
 }

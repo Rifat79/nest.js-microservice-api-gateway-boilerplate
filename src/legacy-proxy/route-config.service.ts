@@ -126,6 +126,25 @@ export class RouteConfigService {
         methods: ['POST', 'GET'],
         requiresAuth: false,
       },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/subscriptions/:subscriptionId/verification',
+        messagePattern: BillingMessagePatterns.VERIFY_PIN,
+        methods: ['POST'],
+        requiresAuth: false,
+      },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/bldob/pin-verify',
+        messagePattern: BillingMessagePatterns.VERIFY_PIN,
+        methods: ['GET'],
+        requiresAuth: false,
+        meta: {
+          provider: 'BL',
+        },
+      },
     ];
 
     routeConfigs.forEach((config) => {

@@ -118,6 +118,14 @@ export class RouteConfigService {
           provider: 'BL',
         },
       },
+      {
+        service: 'billing',
+        baseUrl: '',
+        path: '/api/v2/subscriptions/:subscriptionId/recharge/redirect',
+        messagePattern: BillingMessagePatterns.RECHARGE_AND_BUY_REDIRECTION,
+        methods: ['POST', 'GET'],
+        requiresAuth: false,
+      },
     ];
 
     routeConfigs.forEach((config) => {
